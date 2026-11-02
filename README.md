@@ -4,10 +4,10 @@ Network files that have no public source: data processed in our own papers,
 benchmark inputs that cannot be regenerated, and processed versions of public
 data that we cannot reproduce from the raw data. Everything with a public source
 is fetched from that source instead, through the
-[`mapequation-networks`](https://github.com/mapequation/networks) package. That
+[`netgamut`](https://github.com/mapequation/netgamut) package. That
 package is also where generators live, so synthetic networks are not stored
 here: the overlapping-community memory networks used by the Infomap benchmarks,
-for example, come from `networks.generate.overlapping_memory_benchmark(om, E, seed=1)`.
+for example, come from `netgamut.generate.overlapping_memory_benchmark(om, E, seed=1)`.
 
 Files are stored as they were used, byte for byte. `SHA256SUMS` pins every file;
 check a fetched copy with `shasum -a 256 -c SHA256SUMS`.
@@ -56,7 +56,7 @@ both, itinerary origins, transfers) selects exactly these 183, so the list is
 defined by the file.
 
 The trigram file can be rebuilt from the public DB1B coupons almost, but not
-exactly. `networks.paths.load("db1b-coupon", year=2011, quarter=q)` for
+exactly. `netgamut.paths.load("db1b-coupon", year=2011, quarter=q)` for
 `q = 1, 2, 3` returns passenger-weighted itineraries. Turning each one into its
 triples, plus one self-memory trigram per itinerary, gives the same 464 airports
 and the same totals to within 0.0005%: total weight 44,823,463 against
