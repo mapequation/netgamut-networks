@@ -38,6 +38,14 @@ raw.githubusercontent.com serves the files with
 `Access-Control-Allow-Origin: *`, but without a `Content-Encoding` header, so a
 reader decompresses them itself, for example with `DecompressionStream("gzip")`.
 
+Node ids are the source's own. They are not renumbered 1..N, so a node keeps
+the id the source gave it in every subgraph of a dataset, such as the
+snapshots of a temporal network, even in one where it has no links. This means
+ids can start at 0 and skip numbers, and `*Vertices N` counts the vertex lines,
+not the largest id. Read nodes by id, as Infomap does; a comment line in each
+file gives its id range. For a dataset with several subgraphs, the mirror holds
+the one netgamut loads by default.
+
 The networks belong to their authors and the collections that publish them. The
 mirror only changes their format, so cite the original as each file says. To
 have a network removed, open an issue.
