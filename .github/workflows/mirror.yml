@@ -69,13 +69,21 @@ jobs:
           while :; do
             uvx --from "git+https://github.com/mapequation/netgamut@$NETGAMUT_REF" \
               netgamut export-networks --output mirror --clear-cache --stop-after 45
-            (cd mirror && ../main/scripts/push-in-batches.sh "Build the mirror")
+            # A push that fails even after its retries stays committed, and the
+            # next slice's push takes it along; only the last one must succeed.
+            if (cd mirror && ../main/scripts/push-in-batches.sh "Build the mirror"); then
+              pushed=true
+            else
+              pushed=false
+              echo "::warning::Push failed; the next slice pushes again"
+            fi
             complete=$(jq -r .complete mirror/index.json)
             if [[ $complete == true ]] || ((SECONDS > last_start)); then
               echo "complete=$complete" >>"$GITHUB_OUTPUT"
               break
             fi
           done
+          [[ $pushed == true ]]
 
       - name: Start the next run
         if: steps.build.outputs.complete == 'false'
