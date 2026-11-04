@@ -20,10 +20,15 @@ network straight to the [Network Navigator](https://mapequation.org/navigator/).
 The mirror fills that gap. Each month, `.github/workflows/mirror.yml` runs
 `netgamut export-networks`, which works as follows:
 
-- It converts networks smallest first until 4 GB is spent.
+- It converts networks from all three sources in one size order, smallest
+  first, until 4 GB is spent.
 - It keeps every file under 95 MB, since GitHub refuses files of 100 MiB.
-- It downloads again only networks whose catalog entry changed.
-- It commits the result to the `mirror` branch.
+- It downloads again only networks whose catalog entry changed, so a month
+  without upstream changes commits nothing.
+- It works in slices of 45 minutes and commits each slice to the `mirror`
+  branch before starting the next. A run that reaches the job's time limit
+  starts the next run itself, which continues where it stopped. Until a run
+  gets through every network, the manifest's `complete` is false.
 
 The manifest lists each network with its file, size, node and link counts,
 direction and citations, and says why each other one was left out:
