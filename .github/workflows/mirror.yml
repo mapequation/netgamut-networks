@@ -2,11 +2,15 @@ name: Mirror
 
 # Builds the web mirror on the `mirror` branch: Netzschleuder, KONECT and SNAP
 # networks as gzipped Pajek files, plus the index.json manifest that the netgamut
-# explorer and the Network Navigator read. `netgamut export-networks` updates the
-# checkout in place, so it downloads a network again only when its catalog entry
-# changed. Each source is built and pushed on its own, so a run that hits the
-# six-hour limit keeps what it finished; run it again to continue. A last pass
-# over all three puts them in one size order under the budget.
+# explorer and the Network Navigator read. One pass takes all three sources in
+# one size order, smallest first, so a file that is pushed is not deleted again
+# to make room for a smaller one. `netgamut export-networks` updates the
+# checkout in place and downloads a network again only when its catalog entry
+# changed, so a month without upstream changes commits nothing.
+#
+# The build runs in slices of 45 minutes, each pushed before the next starts,
+# so reaching the job's time limit loses nothing. A run that stops with
+# networks still to build starts the next run itself.
 on:
   schedule:
     # The 8th, so netgamut's monthly catalog refresh has had a week to merge.
@@ -16,13 +20,10 @@ on:
       netgamut:
         description: netgamut branch, tag or commit to build with
         default: main
-      force:
-        description: Rebuild networks whose catalog entry is unchanged
-        type: boolean
-        default: false
 
 permissions:
   contents: write
+  actions: write # to start the next run when this one runs out of time
 
 concurrency:
   group: mirror
@@ -33,8 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 355
     env:
-      NETGAMUT: git+https://github.com/mapequation/netgamut@${{ inputs.netgamut || 'main' }}
-      FORCE: ${{ inputs.force && '--force' || '' }}
+      NETGAMUT_REF: ${{ inputs.netgamut || 'main' }}
     steps:
       # The checkout holds the whole mirror (up to 4 GB, twice with .git), and a
       # conversion needs room for one large network besides.
@@ -60,22 +60,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Netzschleuder
+      - name: Build in slices
+        id: build
         run: |
-          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source netzschleuder --clear-cache $FORCE
-          cd mirror && ../main/scripts/push-in-batches.sh "Netzschleuder"
+          # No new slice after 4 h 45 min: the last one then has time to finish
+          # its network, push, and still end inside the job's limit.
+          last_start=$((SECONDS + 285 * 60))
+          while :; do
+            uvx --from "git+https://github.com/mapequation/netgamut@$NETGAMUT_REF" \
+              netgamut export-networks --output mirror --clear-cache --stop-after 45
+            (cd mirror && ../main/scripts/push-in-batches.sh "Build the mirror")
+            complete=$(jq -r .complete mirror/index.json)
+            if [[ $complete == true ]] || ((SECONDS > last_start)); then
+              echo "complete=$complete" >>"$GITHUB_OUTPUT"
+              break
+            fi
+          done
 
-      - name: KONECT
-        run: |
-          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source konect --clear-cache $FORCE
-          cd mirror && ../main/scripts/push-in-batches.sh "KONECT"
-
-      - name: SNAP
-        run: |
-          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source snap --clear-cache $FORCE
-          cd mirror && ../main/scripts/push-in-batches.sh "SNAP"
-
-      - name: All sources in one size order
-        run: |
-          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --clear-cache
-          cd mirror && ../main/scripts/push-in-batches.sh "Update the mirror"
+      - name: Start the next run
+        if: steps.build.outputs.complete == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run mirror.yml --repo "$GITHUB_REPOSITORY" --ref main -f netgamut="$NETGAMUT_REF"
