@@ -6,19 +6,37 @@
 # index.json come last, in one commit: the manifest never lists a file that is
 # not pushed yet.
 #
+# GitHub sometimes answers a push with a 5xx, so each push is retried, and the
+# script ends with a push of whatever an earlier, failed call left committed.
+#
 # Usage: push-in-batches.sh <message>    (run inside the mirror checkout)
 set -euo pipefail
 
 message=${1:?usage: push-in-batches.sh <message>}
 batch_limit=${BATCH:-1000000000}
+retry_wait=${RETRY_WAIT:-30}
 batch=()
 size=0
+
+push() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if git push --quiet origin HEAD:mirror; then
+      return 0
+    fi
+    if ((attempt < 5)); then
+      echo "push failed (attempt $attempt of 5); retrying in $((attempt * retry_wait)) s" >&2
+      sleep $((attempt * retry_wait))
+    fi
+  done
+  return 1
+}
 
 flush() {
   if ((${#batch[@]})); then
     git add -- "${batch[@]}"
     git commit --quiet --message "$message: ${#batch[@]} networks"
-    git push --quiet origin HEAD:mirror
+    push
     batch=()
     size=0
   fi
@@ -38,5 +56,6 @@ flush
 git add --all
 if ! git diff --cached --quiet; then
   git commit --quiet --message "$message"
-  git push --quiet origin HEAD:mirror
 fi
+# Also carries commits an earlier, failed call left behind; a no-op otherwise.
+push
