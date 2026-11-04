@@ -1,0 +1,81 @@
+name: Mirror
+
+# Builds the web mirror on the `mirror` branch: Netzschleuder, KONECT and SNAP
+# networks as gzipped Pajek files, plus the index.json manifest that the netgamut
+# explorer and the Network Navigator read. `netgamut export-networks` updates the
+# checkout in place, so it downloads a network again only when its catalog entry
+# changed. Each source is built and pushed on its own, so a run that hits the
+# six-hour limit keeps what it finished; run it again to continue. A last pass
+# over all three puts them in one size order under the budget.
+on:
+  schedule:
+    # The 8th, so netgamut's monthly catalog refresh has had a week to merge.
+    - cron: "0 3 8 * *"
+  workflow_dispatch:
+    inputs:
+      netgamut:
+        description: netgamut branch, tag or commit to build with
+        default: main
+      force:
+        description: Rebuild networks whose catalog entry is unchanged
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      NETGAMUT: git+https://github.com/mapequation/netgamut@${{ inputs.netgamut || 'main' }}
+      FORCE: ${{ inputs.force && '--force' || '' }}
+    steps:
+      # The checkout holds the whole mirror (up to 4 GB, twice with .git), and a
+      # conversion needs room for one large network besides.
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - uses: actions/checkout@v7
+        with:
+          path: main
+
+      - uses: actions/checkout@v7
+        with:
+          ref: mirror
+          path: mirror
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.13"
+
+      - name: Configure git
+        working-directory: mirror
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Netzschleuder
+        run: |
+          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source netzschleuder --clear-cache $FORCE
+          cd mirror && ../main/scripts/push-in-batches.sh "Netzschleuder"
+
+      - name: KONECT
+        run: |
+          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source konect --clear-cache $FORCE
+          cd mirror && ../main/scripts/push-in-batches.sh "KONECT"
+
+      - name: SNAP
+        run: |
+          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --source snap --clear-cache $FORCE
+          cd mirror && ../main/scripts/push-in-batches.sh "SNAP"
+
+      - name: All sources in one size order
+        run: |
+          uvx --from "$NETGAMUT" netgamut export-networks --output mirror --clear-cache
+          cd mirror && ../main/scripts/push-in-batches.sh "Update the mirror"

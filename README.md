@@ -1,13 +1,65 @@
-# networks-store
+# netgamut-networks
+
+Network files for [netgamut](https://github.com/mapequation/netgamut) that it
+can't fetch from an upstream source as they are. They come in two parts:
+
+- **Stored files**, on `main`: networks with no public source, kept byte for
+  byte. See [Stored files](#stored-files).
+- **The web mirror**, on the `mirror` branch: Netzschleuder, KONECT and SNAP
+  networks converted to gzipped Pajek, so a web page can load them. See
+  [Web mirror](#web-mirror).
+
+This repository was called `networks-store` until November 2026. GitHub
+redirects the old name.
+
+## Web mirror
+
+The upstream hosts don't let a web page read their files, so the netgamut
+[catalog explorer](https://mapequation.org/netgamut/explorer.html) can't hand a
+network straight to the [Network Navigator](https://mapequation.org/navigator/).
+The mirror fills that gap. Each month, `.github/workflows/mirror.yml` runs
+`netgamut export-networks`, which works as follows:
+
+- It converts networks smallest first until 4 GB is spent.
+- It keeps every file under 95 MB, since GitHub refuses files of 100 MiB.
+- It downloads again only networks whose catalog entry changed.
+- It commits the result to the `mirror` branch.
+
+The manifest lists each network with its file, size, node and link counts,
+direction and citations, and says why each other one was left out:
+
+```
+https://raw.githubusercontent.com/mapequation/netgamut-networks/mirror/index.json
+```
+
+A `file` path in the manifest is relative to the manifest. Each file opens with
+`#` comment lines that name its source and how to cite it.
+raw.githubusercontent.com serves the files with
+`Access-Control-Allow-Origin: *`, but without a `Content-Encoding` header, so a
+reader decompresses them itself, for example with `DecompressionStream("gzip")`.
+
+Node ids are the source's own. They are not renumbered 1..N, so a node keeps
+the id the source gave it in every subgraph of a dataset, such as the
+snapshots of a temporal network, even in one where it has no links. This means
+ids can start at 0 and skip numbers, and `*Vertices N` counts the vertex lines,
+not the largest id. Read nodes by id, as Infomap does; a comment line in each
+file gives its id range. For a dataset with several subgraphs, the mirror holds
+the one netgamut loads by default.
+
+The networks belong to their authors and the collections that publish them. The
+mirror only changes their format, so cite the original as each file says. To
+have a network removed, open an issue.
+
+## Stored files
 
 Network files that have no public source: data processed in our own papers,
 benchmark inputs that cannot be regenerated, and processed versions of public
-data that we cannot reproduce from the raw data. Everything with a public source
-is fetched from that source instead, through the
-[`netgamut`](https://github.com/mapequation/netgamut) package. That
-package is also where generators live, so synthetic networks are not stored
-here: the overlapping-community memory networks used by the Infomap benchmarks,
-for example, come from `netgamut.generate.overlapping_memory_benchmark(om, E, seed=1)`.
+data that we cannot reproduce from the raw data. Networks with a public source
+are not stored here; netgamut fetches them from that source. netgamut is also
+where generators live, so synthetic networks are not stored here either. For
+example, the overlapping-community memory networks used by the Infomap
+benchmarks come from
+`netgamut.generate.overlapping_memory_benchmark(om, E, seed=1)`.
 
 Files are stored as they were used, byte for byte. `SHA256SUMS` pins every file;
 check a fetched copy with `shasum -a 256 -c SHA256SUMS`.
@@ -15,7 +67,6 @@ check a fetched copy with `shasum -a 256 -c SHA256SUMS`.
 Some of these files are derived from third-party data; each section below names
 the source as far as it is known.
 
-## Contents
 
 ### `first-order/`
 
