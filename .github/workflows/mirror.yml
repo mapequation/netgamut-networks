@@ -1,7 +1,7 @@
 name: Mirror
 
 # Builds the web mirror on the `mirror` branch: Netzschleuder, KONECT and SNAP
-# networks as gzipped Pajek files, plus the index.json manifest that the netgamut
+# networks as Parquet links and nodes files, plus the index.json manifest that the netgamut
 # explorer and the Network Navigator read. One pass takes all three sources in
 # one size order, smallest first, so a file that is pushed is not deleted again
 # to make room for a smaller one. `netgamut export-networks` updates the
@@ -67,7 +67,8 @@ jobs:
           # its network, push, and still end inside the job's limit.
           last_start=$((SECONDS + 285 * 60))
           while :; do
-            uvx --from "git+https://github.com/mapequation/netgamut@$NETGAMUT_REF" \
+            # The export extra brings pyarrow, which writes the Parquet files.
+            uvx --from "netgamut[export] @ git+https://github.com/mapequation/netgamut@$NETGAMUT_REF" \
               netgamut export-networks --output mirror --clear-cache --stop-after 45
             # A push that fails even after its retries stays committed, and the
             # next slice's push takes it along; only the last one must succeed.
