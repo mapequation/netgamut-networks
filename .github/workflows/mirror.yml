@@ -90,3 +90,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run mirror.yml --repo "$GITHUB_REPOSITORY" --ref main -f netgamut="$NETGAMUT_REF"
+
+      # A network that failed through a fault in netgamut keeps its previous
+      # file, or none, and is listed under `failed`. Its run turns red here,
+      # after what did build is pushed and the next run is started.
+      - name: Fail on netgamut errors
+        run: |
+          jq -r '(.failed // [])[] | "::error title=\(.key)::\(.reason)"' mirror/index.json
+          failed=$(jq '(.failed // []) | length' mirror/index.json)
+          ((failed == 0))
